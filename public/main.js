@@ -47,6 +47,7 @@ const init = async () => {
   }
 
   document.getElementById("user-1").srcObject = localStream;
+  document.getElementById("user-1").setAttribute("muted", true);
   console.log("My Id: ", socket.id);
   // Join a room:
   socket.emit("join_room", { roomId, userId: socket.id });
