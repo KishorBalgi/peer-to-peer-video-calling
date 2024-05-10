@@ -2,6 +2,22 @@ let localStream;
 let remoteStream;
 let peerConnection;
 
+// Holistics:
+// Load the Holistic model from MediaPipe
+const holistic = new Holistic({
+  locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
+  },
+});
+holistic.setOptions({ smoothLandmarks: true });
+
+// Load the pre-trained TensorFlow.js model
+async function loadModel() {
+  return await tf.loadGraphModel(
+    "https://tensorflow-model-1.onrender.com/model.json"
+  );
+}
+
 // Socket:
 const socket = io();
 
@@ -37,6 +53,8 @@ const servers = {
 
 // Init the app:
 const init = async () => {
+  // Load the TensorFlow.js model
+  const model = await loadModel();
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
       video: true,
@@ -52,6 +70,20 @@ const init = async () => {
   // Join a room:
   socket.emit("join_room", { roomId, userId: socket.id });
 
+  // Process each video frame and render the results
+  const videoElement = document.getElementById("user-1");
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  videoElement.addEventListener("loadedmetadata", async () => {
+    setInterval(async () => {
+      if (!videoElement.paused && !videoElement.ended) {
+        // Process a single video frame
+        await processFrame(videoElement, model, ctx);
+      }
+    }, 5000);
+  });
+
   // on New User joined:
   socket.on(actionEnum.USER_JOINED, handleUserJoined);
 
@@ -61,6 +93,55 @@ const init = async () => {
   // On user left:
   socket.on(actionEnum.USER_LEFT, handleUserLeft);
 };
+
+// Process a single video frame
+async function processFrame(video, model, ctx) {
+  // Capture a frame from the video
+  ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+  const imageData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+
+  // Prepare input data for the model
+  const inputData = preprocess(imageData);
+
+  // Perform inference using the loaded TensorFlow.js model
+  const output = model.predict(inputData);
+
+  // Render the results on the canvas or in any desired way
+  renderResults(output, ctx);
+}
+
+// Preprocess the input data (e.g., normalize the pixel values)
+function preprocess(imageData) {
+  // Convert the image data to a TensorFlow.js tensor
+  const inputTensor = tf.browser.fromPixels(imageData);
+
+  // Resize the input tensor to match the input shape expected by the model
+  const resizedInputTensor = tf.image.resizeBilinear(inputTensor, [1, -1]);
+
+  // Normalize the pixel values to be in the range [0, 1]
+  const normalizedInputTensor = resizedInputTensor.div(tf.scalar(255));
+
+  return normalizedInputTensor;
+}
+
+// Render the results on the canvas or in any desired way
+function renderResults(output, ctx) {
+  // Convert the output tensor to a JavaScript array
+  const outputData = output.arraySync();
+
+  // Render the output of the model on the canvas
+  // For example, you can draw bounding boxes, keypoints, or any other visualizations based on the output
+  // Here's a simple example of drawing a bounding box:
+  const [x, y, width, height] = outputData;
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, width, height);
+
+  // Free up the memory used by the tensors
+
+  output.dispose();
+}
+
 // Handel Peer Message:
 const handlePeerMessage = (message) => {
   if (message.type == "offer") {
