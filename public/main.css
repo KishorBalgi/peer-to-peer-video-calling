@@ -74,3 +74,15 @@
     width: 20px;
   }
 }
+
+#subtitle {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgb(179, 102, 249, 0.9);
+  padding: 10px;
+  border-radius: 5px;
+  color: white;
+  font-size: 1.2em;
+}
